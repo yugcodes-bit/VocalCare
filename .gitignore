@@ -1,0 +1,17 @@
+# Ignore the virtual environment
+vocalcare-ml/venv/
+venv/
+.env
+
+# Ignore Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Ignore large data files/folders
+vocalcare-ml/data/
+*.zip
+*.tar.gz
+*.mp4
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
