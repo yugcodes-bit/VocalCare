@@ -1,0 +1,23 @@
+venv/
+
+# Dataset — too large for GitHub
+data/
+
+# Processed numpy files — too large
+processed_data/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Python cache
+__plusplus__pycache__/
+*.pyc
+*.pyo
+
+# Model files (we'll push only the final .tflite)
+*.h5
+*.pt
+
+# Windows junk
+Thumbs.db
+desktop.ini
