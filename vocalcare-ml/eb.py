@@ -25,3 +25,10 @@ plt.xlabel("Time (seconds)")
 plt.ylabel("Amplitude")
 plt.tight_layout()
 plt.show()
+
+
+
+
+give me your honest opinions about this whole project i am going to build and thinking of scaling it up as something big as a product and pitch in big colleges events
+
+tell me the novelty (score out of 10)of thi prject is there anything exisiting in the market? what do u thiink if this project overall , i want a deep study and research from u . your brutual honest opinions about all this.

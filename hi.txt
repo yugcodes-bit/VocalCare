@@ -1,0 +1,307 @@
+ECO-LOOP — Complete Master Project Document
+
+SECTION 1 — PROJECT IDENTITY
+Full Project Name:
+ECO-LOOP: A Closed-Loop Edge-AI Vis-NIR Spectral System for Non-Destructive Apple Rot Classification, Internal pH Prediction, and Compost Valorization
+Short Name: Eco-Loop
+Domain: Agricultural Technology, Edge AI, NIR Spectroscopy, Waste Valorization
+Team: 2nd Year B.E. Computer Science Engineering students, Pune, Maharashtra
+Project Stage: Active Development — Mid-Implementation Phase
+Target Completion: April 2026 (End-Semester Review)
+Target Publication: IEEE or Springer AgriTech Student Conference 2026
+
+SECTION 2 — THE PROBLEM IN COMPLETE DETAIL
+2.1 The Scale of the Problem
+India is the world's fourth largest apple producer, producing over 25 lakh metric tonnes annually. The primary growing regions are Himachal Pradesh and Jammu & Kashmir, with smaller volumes from Uttarakhand and parts of Maharashtra. Post-harvest losses in the apple supply chain in India are estimated at 20–30% of total produce — meaning roughly 5–7 lakh metric tonnes of apples are lost every year before they reach the consumer.
+These losses happen at multiple points in the supply chain — at the farm during sorting, during cold storage, during transportation, and at the retail end. The core problem at every one of these points is the same: there is no affordable, fast, accurate way to know what is happening inside an apple without cutting it open.
+2.2 Why Existing Detection Methods Fail
+RGB Camera Systems (Surface Vision):
+The most common industrial sorting systems use cameras that capture red-green-blue (RGB) images of apples moving on a conveyor belt. Computer vision algorithms then look for surface blemishes, color anomalies, or shape irregularities. These systems work well for surface defects — a bruise visible on the skin, a discoloration, a physical deformity.
+They fail completely for internal rot. An apple can be perfectly red and smooth on the outside while having a core that is 60% decomposed inside. RGB cameras see only the surface — approximately the top 0.1–0.2mm of tissue. Internal rot begins in the core and works outward. By the time it reaches the surface, the apple is already severely damaged and often unsalvageable. This means RGB systems let a significant fraction of internally rotten apples pass quality checks undetected.
+Manual Visual and Squeeze Inspection:
+Human sorters at farms and mandis assess apples by looking at them and sometimes pressing them to feel for softness. This is slow, subjective, fatiguing, and catches only severe rot where internal collapse has made the apple visibly soft. Early-stage internal rot — which is the most commercially important stage to catch, because the apple may still be redirectable to juice, animal feed, or properly timed composting — is invisible to manual inspection.
+Destructive Chemical Testing:
+Laboratory-grade assessment involves cutting the apple open, extracting juice or tissue, and measuring pH, total soluble solids (Brix), titratable acidity, and other chemical parameters using calibrated instruments. This gives highly accurate data but destroys the product entirely. It is used only for sampling — you test 5 apples out of a batch of 5,000 and assume the rest are similar. This sampling approach misses individual variation and provides no real-time sorting capability.
+Lab-Grade NIR Spectrometers:
+Near-infrared spectroscopy has been used in food science research for decades and is proven to predict internal apple quality non-destructively. However, research-grade NIR spectrometers like the Shimadzu UV-3600i Plus cost ₹25–40 lakh, require calibrated laboratory environments, trained operators, and cannot be moved to a farm, cold storage facility, or processing unit. They are tools for scientists, not for farmers or small processors.
+2.3 The Composting Gap
+Beyond the detection problem, there is a second problem that nobody in the existing literature addresses: what do you do with the waste apples once you've detected them?
+When rotten apples are removed from a batch, they are typically thrown into a general waste pile that goes to landfill or unoptimized compost. Both outcomes are wasteful.
+In landfill, decomposing fruit produces methane — a greenhouse gas 25 times more potent than CO₂ over 100 years. In unoptimized compost, the acidic pH of rotten apple tissue (often below 3.5) creates a compost pile that is too acidic for beneficial microbes, slowing decomposition dramatically and producing poor-quality compost.
+The correct approach is to measure the pH of the waste apple tissue and add specific dry amendments (carbon-rich brown matter like straw, cardboard, wood ash, or eggshell powder) to bring the C:N ratio to the optimal range for composting (25:1 to 30:1 for acidic fruit waste). This produces high-quality compost in 6–8 weeks instead of 16–20 weeks, and the compost has measurably higher nutrient content.
+No existing low-cost system does this. Every NIR paper in literature stops at detection. None closes the loop from detection to compost prescription. This is the gap that Eco-Loop was designed to fill.
+2.4 The Combined Problem Statement (as written for the hackathon)
+Traditional apple sorting systems rely on RGB cameras or manual inspection that assess only the fruit surface, missing internal rot entirely. Destructive chemical testing is accurate but destroys the product. Lab-grade NIR spectrometers are proven but cost ₹25–40 lakh and cannot be field-deployed. The resulting waste apple stream is sent to unoptimized landfill or compost with no scientific amendment, wasting the economic and environmental value of the waste. No existing affordable system simultaneously classifies internal rot at three stages, predicts internal pH non-destructively, and generates a compost amendment prescription. Eco-Loop fills this complete gap.
+
+SECTION 3 — THE ECO-LOOP SOLUTION
+3.1 Core Concept
+Eco-Loop uses near-infrared light to read the internal chemistry of an apple without touching it, classify its rot condition into three stages, predict its internal pH value, and output a specific compost recipe — all in under 3 seconds on a device that costs under ₹15,000 to build.
+3.2 The Science That Makes It Possible
+When an apple rots internally, its tissue undergoes measurable chemical changes. These chemical changes alter how the apple interacts with near-infrared light at specific wavelengths. This is the physical basis of the entire project.
+Chlorophyll breakdown at 680nm:
+Fresh apple skin and tissue contain chlorophyll. Chlorophyll is a molecule that strongly absorbs light at 680nm — meaning a fresh apple reflects very little light back at 680nm (low reflectance). As the apple rots, chlorophyll degrades. With less chlorophyll present to absorb the 680nm light, more of it bounces back to the sensor (high reflectance). So reflectance at 680nm INCREASES as rot progresses. This is a direct chemical signal of rot stage.
+Cell structure collapse at 810nm:
+Healthy apple cells have intact cell walls and are filled with water and sugars. This cell structure strongly scatters NIR light at around 810nm — healthy tissue reflects a lot of 810nm light (high reflectance). When cells collapse during rot, the internal architecture breaks down, reducing scattering. The 810nm reflectance DROPS sharply as rot progresses. This is the single strongest indicator of rot stage in NIR spectroscopy literature and is confirmed by Huang et al. (2021) and multiple other published papers.
+Water band at 940nm:
+NIR light at 940nm is strongly absorbed by water molecules. When cells are healthy and intact, water is contained within cell membranes. When cells rupture during rot, that water leaks into intercellular spaces and eventually evaporates. This reduces water content in the tissue, which reduces 940nm absorption — meaning 940nm reflectance INCREASES slightly as rot progresses in early stages, then drops as the tissue dries out in severe rot. This band adds a secondary signal for rot staging.
+pH and organic acid accumulation:
+As microbial decomposition progresses, organic acids (acetic acid, lactic acid, citric acid breakdown products) accumulate in apple tissue. This directly lowers the internal pH. The relationship between pH and spectral readings is not a single-band relationship — it is captured across multiple bands simultaneously. PLS Regression and Random Forest Regression learn this multi-band pattern from training data and can predict pH from spectral readings alone.
+3.3 Interactance Mode — How the Sensor Actually Reads Internal Tissue
+There are three ways light can interact with a solid object: reflection (bounces off surface), transmission (passes all the way through), and interactance (enters the material, scatters internally, and exits from near the entry point carrying information about internal chemistry).
+Eco-Loop uses interactance mode. The AS7265x sensor is placed directly against the apple surface. When LEDs fire, light enters the apple, scatters through approximately 1–3cm of internal tissue, and exits back to the sensor's photodetectors. This means the sensor is reading the chemistry of the internal tissue — not just the surface. This is what distinguishes NIR interactance from RGB camera surface reading. The dark box design ensures that only interactance light reaches the sensor — ambient light is completely eliminated.
+
+SECTION 4 — HARDWARE COMPONENTS IN COMPLETE DETAIL
+4.1 SparkFun AS7265x Triad Spectroscopy Sensor
+What it is: An 18-channel Vis-NIR spectral sensor on a single breakout board, manufactured by ams AG and sold by SparkFun Electronics.
+Cost: Approximately ₹2,000–8,000 depending on source. The team is currently sourcing this via sponsorship.
+Physical description: A small PCB (printed circuit board) approximately 25mm × 25mm. On it are three sensor chips and three LEDs mounted together.
+The three sub-chips:
+
+AS72651: Reads 6 channels in the 610–760nm range. Has a built-in White LED for illumination.
+AS72652: Reads 6 channels in the 410–535nm range. Has a built-in UV LED for illumination.
+AS72653: Reads 6 channels in the 560–940nm range. Has a built-in IR LED for illumination.
+
+The 18 exact wavelengths the sensor reads:
+410nm, 435nm, 460nm, 485nm, 510nm, 535nm, 560nm, 585nm, 610nm, 645nm, 680nm, 705nm, 730nm, 760nm, 810nm, 860nm, 900nm, 940nm.
+How it measures: Each of the 18 photodetectors has a microscopic optical filter bonded directly on top of it. This filter only allows light of its specific wavelength to reach the detector. All 18 detectors measure simultaneously. The three LEDs fire in sequence — each LED fires for approximately 100ms, giving approximately 300ms total scan time per reading.
+Output: Raw integer values (photon counts) for each channel, transmitted over I2C protocol. These integers are then normalized to 0.0–1.0 reflectance values using the calibration formula.
+I2C communication details:
+
+I2C address: 0x49 (fixed, not configurable)
+SDA (Serial Data): connects to GPIO Pin 3 (GPIO2) on Raspberry Pi
+SCL (Serial Clock): connects to GPIO Pin 5 (GPIO3) on Raspberry Pi
+Power: STRICTLY 3.3V only (Pin 1 on Raspberry Pi). Connecting 5V permanently destroys the sensor IC.
+Ground: Pin 6 on Raspberry Pi
+
+Verification command after wiring:
+i2cdetect -y 1
+Should show "49" at the corresponding address position, confirming the sensor is communicating correctly.
+4.2 Raspberry Pi 4 (4GB RAM)
+What it is: A single-board computer the size of a credit card, capable of running a full Linux operating system and executing Python ML inference.
+Cost: Approximately ₹6,000–7,000. This is a later-stage purchase — current development uses a laptop.
+Why Raspberry Pi specifically:
+
+Runs Python natively — all our ML code (scikit-learn, pandas, FastAPI) runs on it without modification
+Has GPIO pins for direct I2C sensor connection
+Has Wi-Fi built in — enables local network API serving without additional hardware
+Draws only 5W of power — can run on a portable battery pack
+Supports the "edge deployment" claim in the paper — inference happens on the device, no cloud, no internet
+
+Operating System: Raspberry Pi OS (Debian-based Linux)
+Libraries installed on Pi: Python 3.9+, scikit-learn, pandas, numpy, joblib, fastapi, uvicorn, smbus2 (for I2C communication)
+Development phase (current): All coding is done on a laptop. The Pi is only needed for the final demo and paper's edge deployment claim.
+4.3 The Dark Box
+What it is: A custom-built enclosure that creates a controlled light environment for scanning.
+Why it is necessary:
+The AS7265x reads NIR light returning from the apple. If ambient room light — especially fluorescent tube lights, which flicker at 50Hz in India — reaches the sensor, it contaminates the reading. The dark box eliminates all external light.
+Construction:
+
+Outer box: any rigid material — cardboard, wood, or plastic — large enough to house the sensor and admit an apple from the top
+Interior coating: matte black paint or matte black self-adhesive paper on all interior surfaces — absorbs stray light, prevents internal reflections
+Apple entry point: circular hole on top, sized to allow apple contact with sensor below
+Gasket seal: adhesive foam tape (available at hardware stores, approximately ₹40) applied around the circular hole. When the apple is placed on the hole, the foam compresses and seals the gap, preventing any ambient light from entering
+Sensor mounting: AS7265x mounted face-up at the bottom of the box, directly below the apple entry hole
+Wire exit: small hole in the side wall for the 4 I2C wires (GND, 3.3V, SDA, SCL) to exit to the Raspberry Pi. This hole is sealed with foam or tape.
+
+Calibration using the dark box:
+Before every scanning session, two reference scans are taken:
+
+Dark scan: box sealed completely, no apple, LEDs OFF. This captures the electronic noise floor — the baseline reading the sensor produces with zero light input.
+White scan: PTFE (polytetrafluoroethylene) white reference tile placed on the sensor, LEDs ON. PTFE reflects approximately 99% of NIR light and is the industry standard white reference material. This captures maximum possible reflectance.
+
+Normalization formula:
+Reflectance = (Raw reading − Dark reference) / (White reference − Dark reference)
+This converts all raw integer readings to a 0.0–1.0 scale that is comparable across different days, different lighting conditions, and different sensor units. This is the same normalization approach used in the Xia et al. (2020) paper on AS7265x apple spectroscopy.
+4.4 Digital pH Meter
+What it is: A small handheld electronic instrument that measures the acidity/alkalinity of a liquid or semi-liquid sample.
+Cost: ₹300–500 on Amazon India.
+Why needed: During the training data collection phase at IISER, after each apple is scanned spectrally, it must be cut open and the pH of the flesh measured physically. This physical pH measurement is the ground truth label that the regression model trains against. Without pH measurements, there is nothing to train the pH prediction model on.
+Protocol: Insert the cleaned pH meter probe directly into the cut apple flesh, wait 30 seconds for stabilization, record the value to two decimal places.
+Accuracy: A ₹500 meter typically has ±0.1 pH accuracy. Calibrate with pH 4.0 buffer solution before each session. This accuracy is sufficient — our target MAE is ≤ 0.5 pH, so ground truth error of ±0.1 is acceptable.
+
+SECTION 5 — THE IISER PUNE INSTRUMENT AND DATA COLLECTION
+5.1 Shimadzu UV-3600i Plus UV-Vis-NIR Spectrophotometer
+What it is: One of the most precise research-grade spectrophotometers available in university laboratories in India. IISER Pune possesses this instrument and has confirmed its availability for our project scans.
+Wavelength range: 185nm to 3,300nm — covering ultraviolet, full visible spectrum, and near-infrared.
+Resolution: 0.1nm in UV-Vis region — meaning it reads essentially every nanometre continuously, producing approximately 600 data points between 400nm and 1000nm alone.
+Why 600 data points vs our sensor's 18: The Shimadzu is a research instrument designed to capture complete spectral information for scientific analysis. The AS7265x is a deployment sensor designed to be cheap, small, and fast. The Shimadzu gives us the complete truth about what the apple looks like spectrally. We then extract only the 18 points that match our sensor's wavelengths — this is the downsampling step.
+Detector system: Three detectors — PMT (photomultiplier tube) for UV-Visible range, InGaAs for 750–1600nm (our critical NIR range), and cooled PbS for 1600–3300nm. The InGaAs detector provides extremely high sensitivity in the 810nm and 940nm bands — our two most important diagnostic wavelengths.
+The Integrating Sphere attachment: This is the critical accessory that makes apple scanning possible. A standard spectrophotometer is designed for liquid samples in glass cuvettes. The Integrating Sphere is a hollow white-coated sphere with a port on the side where solid samples (whole apples) are placed. Light bounces around inside the sphere in all directions, and the detector captures the total diffuse reflectance from all angles. This replicates interactance-mode measurement and is the correct scientific approach for whole fruit scanning.
+The technician instruction list (exactly what to say):
+"We need solid sample reflectance measurement on whole apples using the Integrating Sphere attachment. Please set scan range to 400nm–1000nm, mode to Reflectance (not Transmittance), scanning interval to 1nm, and export the output as a CSV file with wavelength in column 1 and reflectance percentage in column 2. We also need a baseline white reference scan before our samples."
+5.2 Current Dataset Status — Honest and Complete
+Current situation:
+IISER Pune has confirmed the Shimadzu UV-3600i Plus is available for our project. However, the cost of scanning is ₹1,000 per apple sample. This is a significant constraint for a student project.
+Immediate plan (Phase 1):
+We are proceeding with 2 apple samples for the initial pilot visit. These 2 apples will be:
+
+Apple A: Fresh apple — purchased from market same day, visually confirmed fresh
+Apple B: Rotting apple — either aged 7–10 days at room temperature or sourced from vendor reject stock
+
+Each apple will be scanned 3 times (bottom, equatorial, top positions) at the Shimadzu, and pH will be measured immediately after scanning with a digital pH meter. Total cost: ₹2,000 for 2 scans.
+What 2 samples proves:
+These 2 scans are not for training the model. They are for validation of the synthetic data approach. Specifically:
+
+Do the real Shimadzu readings for a Fresh apple match the spectral profile we built into our synthetic data generator?
+Is 810nm higher for the Fresh apple than the Rotting apple in real data, as literature and our synthetic data predict?
+Is 680nm lower for the Fresh apple than the Rotting apple in real data?
+Does the real pH reading match the pH range we assigned to each class in our synthetic data?
+
+If yes on all counts — our synthetic model is validated. We can confidently say: "Our synthetic data accurately represents real-world spectral behaviour, and our trained model is ready for real-data fine-tuning."
+If the readings differ — we document exactly how much they differ, build a correction formula (calibration offset), adjust our synthetic profiles, and retrain. This difference itself becomes a published finding — the sensor-to-sensor calibration gap contribution.
+Phase 2 — Funding and Scaling:
+After Phase 1 validation, the team will pursue three parallel funding avenues:
+
+College internal funding: Our guide has acknowledged that college funding is possible but rare. We are preparing a formal pitch document with Phase 1 validation results as evidence of project viability.
+IISER Pune collaboration: If Phase 1 results are scientifically interesting, we will approach the IISER lab directly to propose a formal collaboration. Under a collaboration, IISER provides scanning access in exchange for co-authorship on the paper. This is standard academic practice and is our most realistic path to 75 samples.
+AgriTech startup sponsorship: Pune has a growing agricultural technology startup ecosystem. A targeted sponsorship request to 3–5 relevant startups for ₹15,000–20,000 total (covering sensor hardware + scanning costs for 50 additional apples) is feasible with Phase 1 results in hand.
+
+Target dataset for full model training: 75 apple samples — 25 Fresh, 25 Early-Rot, 25 Severe-Rot. This is the minimum statistically meaningful dataset for 3-class classification with 18 features, based on published NIR spectroscopy studies with similar sensor configurations.
+Apple sourcing strategy for full dataset:
+
+25 Fresh apples: purchased from Pune market same day of scanning — approximately ₹800–1,000
+25 Early-Rot apples: Fresh apples aged 4–7 days at room temperature (approximately 25–30°C) — zero additional cost
+25 Severe-Rot apples: sourced free or at negligible cost from APMC Pune vendor reject stock — vendors discard these daily
+Total apple cost for full dataset: approximately ₹1,000–1,500
+Total scanning cost at IISER: ₹75,000 (75 × ₹1,000) — the primary funding target
+
+5.3 The Downsampling Process — How IISER Data Becomes Model-Ready
+The Shimadzu outputs approximately 600 data points between 400nm and 1000nm. Our AS7265x sensor reads only 18 specific wavelengths in that range.
+To train a model that can be deployed on the AS7265x, the training data must match the sensor's format exactly — 18 values per sample. The downsampling process does this:
+For each of the 18 AS7265x wavelengths, we take a ±12nm window around that wavelength in the Shimadzu data and average all readings within that window.
+Example for the 810nm channel:
+
+Take all Shimadzu readings from 798nm to 822nm
+Average those ~24 values
+That single averaged value becomes the training data value for the ch_810nm column
+
+This process is repeated for all 18 channels. The result is one row of 18 values per apple scan — exactly matching what the AS7265x would produce for the same apple.
+
+SECTION 6 — THE COMPLETE AI PIPELINE
+6.1 Data Structure
+Every apple in the dataset produces one row in the master CSV file with the following columns:
+sample_id | ch_410nm | ch_435nm | ch_460nm | ch_485nm | ch_510nm | ch_535nm |
+ch_560nm | ch_585nm | ch_610nm | ch_645nm | ch_680nm | ch_705nm | ch_730nm |
+ch_760nm | ch_810nm | ch_860nm | ch_900nm | ch_940nm | pH | class_label | class_name
+Total columns: 22 (1 ID + 18 spectral + 1 pH + 1 numeric label + 1 text label)
+6.2 The Two Separate ML Problems
+Problem A — Classification:
+Input: 18 spectral reflectance values (0.0 to 1.0)
+Output: One of three classes — 0 (Fresh), 1 (Early-Rot), 2 (Severe-Rot)
+Type: Multi-class classification problem
+Problem B — Regression:
+Input: Same 18 spectral reflectance values
+Output: A continuous pH value (e.g., 3.74)
+Type: Regression problem
+These are trained as two completely separate models on the same dataset. In deployment, both models run in sequence on the same apple scan — first the classifier outputs the rot class, then the regressor outputs the predicted pH.
+6.3 Data Preprocessing
+Train/test split: 80% training (60 samples), 20% testing (15 samples). Stratified splitting ensures each class is proportionally represented in both train and test sets.
+Feature scaling: StandardScaler is applied to all features — each feature is transformed to have mean = 0 and standard deviation = 1. This is necessary for SVM and Ridge Regression which are sensitive to feature scale. Random Forest does not require scaling but we scale all inputs for consistency. The fitted scaler is saved as scaler.pkl and must be applied to any new apple reading before passing it to the model.
+6.4 Classification Models — Detail
+Model 1: Random Forest Classifier
+A Random Forest builds 100 decision trees (n_estimators=100). Each tree is trained on a random subset of the training data and a random subset of the 18 features at each split point. This randomness prevents overfitting. For a new apple, all 100 trees vote on the class and the majority wins.
+Why chosen: Proven to be the top performer in NIR spectroscopy classification tasks in published literature. Handles small datasets well. Naturally provides feature importance scores — telling us which of the 18 channels contributed most to classification decisions. Robust to outliers.
+Model 2: SVM — Support Vector Machine (RBF Kernel)
+SVM finds the optimal boundary between classes by maximizing the margin — the distance between the boundary line and the nearest data points of each class. The RBF (Radial Basis Function) kernel allows SVM to draw curved, non-linear boundaries in high-dimensional space. This is important because the relationship between 18 spectral channels and rot class is not linearly separable.
+Why chosen: Consistently strong performer on small-to-medium spectral datasets in literature. Particularly effective when the number of features (18) is comparable to the number of samples (75). Requires standardized features — which we provide via StandardScaler.
+Model 3: k-Nearest Neighbors (k=5)
+kNN classifies a new apple by finding the 5 most similar apples in the training set (based on Euclidean distance across all 18 channels) and assigning the majority class of those 5 neighbors.
+Why chosen: Acts as the simplest possible baseline. No training phase — it simply memorizes the training data. If kNN performs poorly on real data while RF performs well, it confirms that RF's learned decision boundaries provide genuine value beyond simple similarity matching.
+Evaluation metric: Weighted F1-Score
+F1-Score = 2 × (Precision × Recall) / (Precision + Recall)
+Precision answers: Of all the apples I labeled as Rotten, what fraction were actually Rotten?
+Recall answers: Of all the actually Rotten apples, what fraction did I correctly identify?
+Weighted F1 averages this across all 3 classes, weighting by class size. This is the correct metric for multi-class classification because accuracy alone can be misleading if class sizes are unequal.
+Target: Weighted F1 ≥ 0.88 on real IISER data.
+Hyperparameter tuning: GridSearchCV with 5-fold cross-validation. The training set is split into 5 equal parts. The model trains on 4 parts and validates on the remaining 1 part, rotating 5 times. This gives a more reliable performance estimate than a single train/test split on a small dataset.
+6.5 Regression Models — Detail
+Model 1: Random Forest Regressor
+Same ensemble approach as the classifier, but instead of voting on a class, the 100 trees each predict a pH value and the final prediction is the average of all 100 predictions. This averaging reduces variance and produces stable, robust pH estimates.
+Model 2: PLS Regression — Partial Least Squares
+PLS is the gold standard algorithm in NIR chemometrics — the scientific field of predicting chemical properties from spectral data. It works by finding linear combinations of the 18 spectral channels (called latent variables or components) that have maximum covariance with the pH values. These components capture the underlying chemical variation that drives both spectral changes and pH changes simultaneously.
+We use n_components=3 — meaning 3 latent variables — which is standard for 18-band sensors in fruit quality literature. On clean synthetic data, PLS appears weaker than Random Forest. On real, noisy, high-dimensional spectral data from the Shimadzu (600 bands), PLS typically matches or exceeds Random Forest. Both will be evaluated on real data and the better performer deployed.
+PLS is non-negotiable to include because every peer reviewer of an NIR spectroscopy paper will ask "why didn't you test PLS?" Not including it would be a fatal flaw in any submitted paper.
+Model 3: Ridge Regression
+Ridge fits a linear equation connecting the 18 spectral values to pH. It adds a regularization penalty (alpha=1.0) that prevents any single channel from dominating the equation, reducing overfitting on small datasets. Acts as the linear baseline — if Ridge performs comparably to RF on real data, the relationship is simple and linear. If RF significantly outperforms Ridge, the relationship is complex and non-linear.
+Evaluation metrics:
+
+MAE (Mean Absolute Error): Average pH prediction error. Target ≤ 0.5 pH. Currently achieving 0.149 on synthetic data.
+RMSE (Root Mean Squared Error): Penalizes large errors more heavily than MAE. Secondary metric.
+R² (R-squared): What fraction of pH variation does the spectral data explain? Currently 0.869 on synthetic data — meaning the 18 channels explain 86.9% of pH variation.
+
+6.6 Saved Model Files
+After training, four files are saved to the models/ directory:
+models/
+├── scaler.pkl           — StandardScaler fitted on training data
+├── best_classifier.pkl  — Best performing classification model
+├── best_regressor.pkl   — Best performing regression model
+└── train_models.py      — Training script
+In deployment, the system loads scaler.pkl, best_classifier.pkl, and best_regressor.pkl. A new apple reading (18 raw values) is first normalized using the calibration formula, then scaled using scaler.pkl, then passed to both models simultaneously.
+
+SECTION 7 — THE COMPOST VALORIZATION ENGINE
+This is the component that makes Eco-Loop unique in all of published literature. Every existing NIR paper stops at detection. Eco-Loop continues to prescription.
+7.1 The Science Behind the Decision Table
+Composting is the controlled aerobic decomposition of organic material by microbes. The two most important parameters for efficient composting are:
+pH: Microbes that drive composting work best in the pH range 6.0–7.5. Apple waste with pH below 3.5 is severely acidic — it kills beneficial microbes, slows decomposition to a crawl, and produces foul-smelling anaerobic compost. Amendments must neutralize this acidity before composting can proceed efficiently.
+C:N Ratio (Carbon to Nitrogen Ratio): Microbes need carbon for energy and nitrogen to build proteins. The optimal C:N ratio for composting is 25:1 to 30:1. Rotten fruit is nitrogen-rich (low C:N ratio, approximately 15:1). Adding carbon-rich brown matter (straw, cardboard, dry leaves, wood ash) brings the ratio to the optimal range and speeds decomposition.
+7.2 The 6-Tier pH Decision Table
+pH BandRot StageC:N TargetPrimary AmendmentSecondary Amendment< 3.0Severe Rot30:1Crushed eggshells + wood ashDry leaves (heavy addition)3.0–3.5High Rot25:1Dry straw + cardboard shredsSmall amount of lime powder3.5–4.0Early-Moderate20:160% brown matter + 40% green matterStandard balanced mix4.0–5.0Mild Acidic15:150% brown + 50% greenOptimal balance zone5.0–6.0Near-Neutral10:1Grass clippings + vegetable scrapsNitrogen-rich additionsFresh (Class 0)No RotN/ARoute to human consumption or animal feedDO NOT compost
+7.3 How the Engine Works in Code
+The compost engine is a pure Python function in utils/compost_engine.py. It takes two inputs — the predicted class (0, 1, or 2) and the predicted pH (a float) — and returns a dictionary containing the rot stage, recommended C:N ratio, and specific amendment prescription as a human-readable string.
+This function is called by the FastAPI server after every apple scan and its output is included in the JSON response.
+
+
+
+
+
+SECTION 12 — KNOWN LIMITATIONS AND HOW WE ADDRESS THEM
+Limitation 1 — Small dataset (75 samples):
+This is the minimum for meaningful 3-class NIR classification with 18 features. Results will have wider confidence intervals than a 500-sample study. We address this by using 5-fold cross-validation rather than a single test split, which gives more reliable performance estimates on small datasets.
+Limitation 2 — Single variety bias:
+A model trained on one apple variety will have reduced accuracy on significantly different varieties. We address this by documenting it honestly as a limitation, using relative spectral change patterns rather than absolute values where possible, and identifying cross-variety calibration as primary future work.
+Limitation 3 — Sensor-to-sensor gap:
+The Shimadzu reads 600 bands at sub-nanometre resolution. The AS7265x reads 18 fixed bands with ±12nm bandwidth. Downsampling introduces information loss. We address this by quantifying the accuracy gap between Shimadzu-trained models and AS7265x-deployed models as a formal contribution — this gap analysis itself is publishable.
+Limitation 4 — pH meter accuracy (±0.1):
+Ground truth pH measurements have ±0.1 inherent error. With a target MAE of ≤ 0.5, the ground truth error is 20% of the target tolerance. This is acceptable for this scope. We calibrate the pH meter before each session using standard buffer solutions and report this limitation in the paper.
+Limitation 5 — Cost of scaling:
+At ₹1,000 per scan, collecting 75 samples costs ₹75,000. This is the primary financial constraint. The two-phase approach (2 pilot scans first, then funding pitch with validated results) is the pragmatic solution.
+
+SECTION 13 — NOVELTY STATEMENT
+After reviewing 20 published research papers, the following combination of features has not been found in any single existing system:
+
+Low-cost 18-channel Vis-NIR spectral sensor (AS7265x) — not lab-grade equipment
+Three-class rot staging (Fresh / Early-Rot / Severe-Rot) — not binary classification
+Non-destructive internal pH prediction from spectral data — not from physical measurement
+Closed-loop compost amendment prescription based on predicted pH — not found in any paper
+Complete edge deployment on Raspberry Pi — no cloud, no internet
+Multi-model benchmark: 3 classifiers + 3 regressors simultaneously — not common in low-cost NIR literature
+Sensor-to-sensor calibration gap quantification (Shimadzu to AS7265x) — undocumented in literature
+
+The combination of all seven elements in a single system is the novelty. Individual elements exist in isolation in various papers. The complete closed loop does not.
+
+SECTION 14 — FEASIBILITY ASSESSMENT
+Is the technology feasible?
+Yes. Every individual component is proven:
+
+NIR spectroscopy for apple quality: proven in 20+ papers
+AS7265x for food sensing: used in published research (Xia et al. 2020)
+Random Forest for NIR classification: standard approach in literature
+PLS for NIR pH prediction: gold standard in chemometrics
+FastAPI on Raspberry Pi: well-documented, actively used in IoT projects
+
+Is the timeline feasible?
+Yes for the core system. The April 2026 deadline covers:
+
+Phase 1 IISER visit: March 2026
+Funding pitch: March–April 2026
+Full data collection (if funded): April 2026
+Paper draft: April 2026
+
+The tight timeline means the conference submission may contain preliminary results with 2 real samples + synthetic validation. This is acceptable for a student conference — the paper contributes the system design, methodology, and dataset protocol even without full 75-sample results.
+Is it scalable?
+Yes. The system is designed modularly. Scaling involves:
+
+Replacing the Raspberry Pi with a more powerful edge device for faster inference
+Adding variety-specific calibration modules as separate model files
+Expanding the compost engine to handle additional fruit types (mango, banana)
+Deploying multiple units at a single processing facility via a central Wi-Fi network where all units report to one dashboard

@@ -1,0 +1,40 @@
+name: vocalcare_app
+description: Voice controlled smart home for paralyzed patients
+
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # TFLite model inference
+  tflite_flutter: ^0.11.0
+  
+  # Microphone recording (switching to flutter_sound)
+  flutter_sound: ^9.2.13
+  
+  # File handling
+  path_provider: ^2.1.2
+  
+  # MQTT for sending commands to ESP32
+  mqtt_client: ^10.2.1
+  
+  # Permissions (mic access)
+  permission_handler: ^11.3.1
+  # WAV file reading
+  wav: ^1.5.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/vocalcare_model.tflite
