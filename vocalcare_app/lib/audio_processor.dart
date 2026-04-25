@@ -11,45 +11,35 @@ class AudioProcessor {
 
   // Main method — takes WAV file path, returns mel spectrogram
   static Future<List<List<double>>> processAudio(String filePath) async {
-    // Step 1 — Read WAV file
-    final file = File(filePath);
-    final bytes = await file.readAsBytes();
-    final wav = Wav.read(bytes);
+  // Step 1 — Read WAV file
+  final file = File(filePath);
+  final bytes = await file.readAsBytes();
+  final wav = Wav.read(bytes);
 
-    // Step 2 — Get audio samples as doubles
-    List<double> samples = wav.channels[0].toList();
-    print('WAV samples loaded: ${samples.length}');
+  // Step 2 — Get audio samples
+  List<double> samples = wav.channels[0].toList();
+  print('WAV samples loaded: ${samples.length}');
 
-    // Step 3 — Pad or trim to exactly 1 second
-    samples = _fixLength(samples, targetLength);
-    print('After fix length: ${samples.length}');
+  // Step 3 — Extract voice window (NEW)
+  samples = _extractVoiceWindow(samples, sampleRate);
+  print('After VAD: ${samples.length} samples');
 
-    // Step 4 — Compute mel spectrogram
-    final melSpec = _melSpectrogram(samples);
-    print('Mel spec shape: ${melSpec.length} x ${melSpec[0].length}');
+  // Step 4 — Pad or trim to exactly 1 second
+  samples = _fixLength(samples, targetLength);
+  print('After fix length: ${samples.length}');
 
-    // Step 5 — Normalize to 0-1 range
-    final normalized = _normalize(melSpec);
+  // Step 5 — Compute mel spectrogram
+  final melSpec = _melSpectrogram(samples);
+  print('Mel spec: ${melSpec.length} x ${melSpec[0].length}');
 
-    // Step 6 — Fix time axis to exactly 32 columns
-    final fixed = _fixTimeAxis(normalized, 32);
-    print('After fix time axis: ${fixed.length} x ${fixed[0].length}');
+  // Step 6 — Normalize
+  final normalized = _normalize(melSpec);
 
-    return fixed;
-  }
+  // Step 7 — Fix time axis to 32
+  final fixed = _fixTimeAxis(normalized, 32);
 
-  // Pad or trim samples to exact length
-  static List<double> _fixLength(List<double> samples, int length) {
-    if (samples.length >= length) {
-      return samples.sublist(0, length);
-    }
-    final padded = List<double>.filled(length, 0.0);
-    for (int i = 0; i < samples.length; i++) {
-      padded[i] = samples[i];
-    }
-    return padded;
-  }
-
+  return fixed;
+}
   // Pad or trim time axis to exact columns
   static List<List<double>> _fixTimeAxis(
       List<List<double>> spec, int targetCols) {
@@ -117,7 +107,7 @@ class AudioProcessor {
     final real = List<double>.from(input);
     final imag = List<double>.filled(n, 0.0);
 
-    int j = 0;
+    int j = 0;  
     for (int i = 1; i < n; i++) {
       int bit = n >> 1;
       while (j >= bit) {
@@ -161,6 +151,62 @@ class AudioProcessor {
 
     return List.generate(n ~/ 2 + 1, (i) => [real[i], imag[i]]);
   }
+
+  // Voice Activity Detection — finds where speech starts and ends
+static List<double> _extractVoiceWindow(List<double> samples, int sr) {
+  const int frameSize = 512;
+  const double energyThreshold = 0.001;
+
+  // Calculate energy of each frame
+  List<double> energies = [];
+  for (int i = 0; i + frameSize < samples.length; i += frameSize) {
+    double energy = 0;
+    for (int j = i; j < i + frameSize; j++) {
+      energy += samples[j] * samples[j];
+    }
+    energies.add(energy / frameSize);
+  }
+
+  // Find first and last frame above threshold
+  int startFrame = 0;
+  int endFrame = energies.length - 1;
+
+  for (int i = 0; i < energies.length; i++) {
+    if (energies[i] > energyThreshold) {
+      startFrame = (i - 2).clamp(0, energies.length - 1);
+      break;
+    }
+  }
+
+  for (int i = energies.length - 1; i >= 0; i--) {
+    if (energies[i] > energyThreshold) {
+      endFrame = (i + 2).clamp(0, energies.length - 1);
+      break;
+    }
+  }
+
+  // Convert frames back to samples
+  int startSample = startFrame * frameSize;
+  int endSample = (endFrame * frameSize + frameSize)
+      .clamp(0, samples.length);
+
+  print('Voice detected: $startSample to $endSample samples');
+
+  // Extract that window
+  return samples.sublist(startSample, endSample);
+}
+// Pad or trim samples to exact length
+static List<double> _fixLength(List<double> samples, int targetLen) {
+  if (samples.length >= targetLen) {
+    return samples.sublist(0, targetLen);  // trim
+  }
+  // pad with zeros
+  final padded = List<double>.filled(targetLen, 0.0);
+  for (int i = 0; i < samples.length; i++) {
+    padded[i] = samples[i];
+  }
+  return padded;
+}
 
   // Mel filterbank
   static List<List<double>> _melFilterbank(int nMels, int nFft, int sr) {
@@ -214,4 +260,5 @@ class AudioProcessor {
             .toList())
         .toList();
   }
+  
 }
