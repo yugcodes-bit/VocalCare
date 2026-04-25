@@ -114,56 +114,63 @@ class _HomePageState extends State<HomePage> {
   // MQTT connect
   // ─────────────────────────────────────────────
   Future<void> _connectMQTT() async {
-    try {
-      final clientId =
-          'FlutterVocalCare_${DateTime.now().millisecondsSinceEpoch}';
-      _mqttClient =
-          MqttServerClient('broker.hivemq.com', clientId);
-      _mqttClient!.port            = 1883;
-      _mqttClient!.keepAlivePeriod = 60;
-      _mqttClient!.logging(on: false);
+  try {
+    final clientId = 'VocalCare_${DateTime.now().millisecondsSinceEpoch}';
+    _mqttClient = MqttServerClient('broker.hivemq.com', clientId);
+    _mqttClient!.port = 1883;
+    _mqttClient!.keepAlivePeriod = 20;
+    _mqttClient!.connectTimeoutPeriod = 15000;
+    _mqttClient!.logging(on: false);
 
-      final connMsg = MqttConnectMessage()
-          .withClientIdentifier(clientId)
-          .startClean()
-          .withWillQos(MqttQos.atLeastOnce);
-      _mqttClient!.connectionMessage = connMsg;
+    final connMsg = MqttConnectMessage()
+        .withClientIdentifier(clientId)
+        .startClean()
+        .withWillQos(MqttQos.atMostOnce);
+    _mqttClient!.connectionMessage = connMsg;
 
-      await _mqttClient!.connect();
+    print('Connecting to HiveMQ...');
+    final status = await _mqttClient!.connect();
+    print('Connection status: $status');
 
-      if (_mqttClient!.connectionStatus!.state ==
-          MqttConnectionState.connected) {
-        setState(() => _mqttConnected = true);
-        print('MQTT connected!');
-      } else {
-        print('MQTT failed: ${_mqttClient!.connectionStatus}');
-      }
-    } catch (e) {
-      print('MQTT error: $e');
-    }
-  }
+    if (_mqttClient!.connectionStatus!.state ==
+    MqttConnectionState.connected) {
+  setState(() => _mqttConnected = true);
+  print('MQTT connected successfully!');
+} else {
+  setState(() => _mqttConnected = false);
+  print('MQTT not connected: ${_mqttClient!.connectionStatus}');
+}
+} catch (e) {
+  setState(() => _mqttConnected = false);
+  print('MQTT error: $e');
+}
+}
 
   // ─────────────────────────────────────────────
   // Publish command to ESP8266
   // ─────────────────────────────────────────────
- void _publishCommand(String command) {
-  print('=== PUBLISH CALLED ===');
-  print('MQTT connected: $_mqttConnected');
-  print('Client is null: ${_mqttClient == null}');
-  
-  if (!_mqttConnected || _mqttClient == null) {
-    print('MQTT not connected — cannot publish');
-    return;
-  }
-
-  print('Client state: ${_mqttClient!.connectionStatus?.state}');
-  
+ void _publishCommand(String command) async {
   try {
+    // Check actual state, not just our flag
+    if (_mqttClient == null ||
+        _mqttClient!.connectionStatus!.state != MqttConnectionState.connected) {
+      print('MQTT disconnected — reconnecting...');
+      setState(() => _mqttConnected = false);
+      await _connectMQTT();
+      // Wait a moment for connection to establish
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+
+    if (_mqttClient!.connectionStatus!.state != MqttConnectionState.connected) {
+      print('Still not connected — cannot publish');
+      return;
+    }
+
     final builder = MqttClientPayloadBuilder();
     builder.addString(command);
     _mqttClient!.publishMessage(
       'vocalcare/command',
-      MqttQos.atLeastOnce,
+      MqttQos.atMostOnce,
       builder.payload!,
     );
     print('Published successfully: $command');
