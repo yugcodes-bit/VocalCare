@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_sound/flutter_sound.dart';
@@ -56,7 +57,13 @@ class _HomePageState extends State<HomePage> {
   String _predictedCommand = '';
   String? _lastRecordedPath;
 
-  // ── Commands ──────────────────────────────────
+  // ── Sensor state (from ESP8266) ───────────────
+  int    _airQuality = 0;
+  String _coStatus   = 'UNKNOWN';
+
+  // ── Commands — must match model training order ─
+  // Keep all 8 — indices must match model output
+  // "stop" (index 4) is remapped to "go" before publishing
   final List<String> _commands = [
     'on', 'off', 'yes', 'no', 'stop', 'go', 'up', 'down'
   ];
@@ -111,73 +118,109 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ─────────────────────────────────────────────
-  // MQTT connect
+  // MQTT connect + subscribe to both topics
   // ─────────────────────────────────────────────
   Future<void> _connectMQTT() async {
-  try {
-    final clientId = 'VocalCare_${DateTime.now().millisecondsSinceEpoch}';
-    _mqttClient = MqttServerClient('broker.hivemq.com', clientId);
-    _mqttClient!.port = 1883;
-    _mqttClient!.keepAlivePeriod = 20;
-    _mqttClient!.connectTimeoutPeriod = 15000;
-    _mqttClient!.logging(on: false);
+    try {
+      final clientId = 'VocalCare_${DateTime.now().millisecondsSinceEpoch}';
+      _mqttClient = MqttServerClient('broker.hivemq.com', clientId);
+      _mqttClient!.port = 1883;
+      _mqttClient!.keepAlivePeriod = 20;
+      _mqttClient!.connectTimeoutPeriod = 15000;
+      _mqttClient!.logging(on: false);
 
-    final connMsg = MqttConnectMessage()
-        .withClientIdentifier(clientId)
-        .startClean()
-        .withWillQos(MqttQos.atMostOnce);
-    _mqttClient!.connectionMessage = connMsg;
+      final connMsg = MqttConnectMessage()
+          .withClientIdentifier(clientId)
+          .startClean()
+          .withWillQos(MqttQos.atMostOnce);
+      _mqttClient!.connectionMessage = connMsg;
 
-    print('Connecting to HiveMQ...');
-    final status = await _mqttClient!.connect();
-    print('Connection status: $status');
+      print('Connecting to HiveMQ...');
+      final status = await _mqttClient!.connect();
+      print('Connection status: $status');
 
-    if (_mqttClient!.connectionStatus!.state ==
-    MqttConnectionState.connected) {
-  setState(() => _mqttConnected = true);
-  print('MQTT connected successfully!');
-} else {
-  setState(() => _mqttConnected = false);
-  print('MQTT not connected: ${_mqttClient!.connectionStatus}');
-}
-} catch (e) {
-  setState(() => _mqttConnected = false);
-  print('MQTT error: $e');
-}
-}
+      if (_mqttClient!.connectionStatus!.state ==
+          MqttConnectionState.connected) {
+        setState(() => _mqttConnected = true);
+        print('MQTT connected successfully!');
+
+        // Subscribe to sensor topic (ESP8266 → App)
+        _mqttClient!.subscribe('vocalcare/sensors', MqttQos.atMostOnce);
+        print('Subscribed to vocalcare/sensors');
+
+        // Listen for incoming messages
+        _mqttClient!.updates!.listen(
+          (List<MqttReceivedMessage<MqttMessage>> messages) {
+            for (final msg in messages) {
+              final recMess = msg.payload as MqttPublishMessage;
+              final payload = MqttPublishPayload.bytesToStringAsString(
+                  recMess.payload.message);
+
+              if (msg.topic == 'vocalcare/sensors') {
+                _parseSensorData(payload);
+              }
+            }
+          },
+        );
+      } else {
+        setState(() => _mqttConnected = false);
+        print('MQTT not connected: ${_mqttClient!.connectionStatus}');
+      }
+    } catch (e) {
+      setState(() => _mqttConnected = false);
+      print('MQTT error: $e');
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // Parse sensor JSON from ESP8266
+  // Format: {"air_quality":214,"co_status":"SAFE"}
+  // ─────────────────────────────────────────────
+  void _parseSensorData(String payload) {
+    try {
+      final data = jsonDecode(payload);
+      setState(() {
+        _airQuality = (data['air_quality'] as num?)?.toInt() ?? 0;
+        _coStatus   = data['co_status']?.toString() ?? 'UNKNOWN';
+      });
+      print('Sensor update → AQI: $_airQuality | CO: $_coStatus');
+    } catch (e) {
+      print('Sensor parse error: $e | raw: $payload');
+    }
+  }
 
   // ─────────────────────────────────────────────
   // Publish command to ESP8266
   // ─────────────────────────────────────────────
- void _publishCommand(String command) async {
-  try {
-    // Check actual state, not just our flag
-    if (_mqttClient == null ||
-        _mqttClient!.connectionStatus!.state != MqttConnectionState.connected) {
-      print('MQTT disconnected — reconnecting...');
-      setState(() => _mqttConnected = false);
-      await _connectMQTT();
-      // Wait a moment for connection to establish
-      await Future.delayed(const Duration(milliseconds: 500));
-    }
+  void _publishCommand(String command) async {
+    try {
+      if (_mqttClient == null ||
+          _mqttClient!.connectionStatus!.state !=
+              MqttConnectionState.connected) {
+        print('MQTT disconnected — reconnecting...');
+        setState(() => _mqttConnected = false);
+        await _connectMQTT();
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
 
-    if (_mqttClient!.connectionStatus!.state != MqttConnectionState.connected) {
-      print('Still not connected — cannot publish');
-      return;
-    }
+      if (_mqttClient!.connectionStatus!.state !=
+          MqttConnectionState.connected) {
+        print('Still not connected — cannot publish');
+        return;
+      }
 
-    final builder = MqttClientPayloadBuilder();
-    builder.addString(command);
-    _mqttClient!.publishMessage(
-      'vocalcare/command',
-      MqttQos.atMostOnce,
-      builder.payload!,
-    );
-    print('Published successfully: $command');
-  } catch (e) {
-    print('Publish error: $e');
+      final builder = MqttClientPayloadBuilder();
+      builder.addString(command);
+      _mqttClient!.publishMessage(
+        'vocalcare/command',
+        MqttQos.atMostOnce,
+        builder.payload!,
+      );
+      print('Published: $command');
+    } catch (e) {
+      print('Publish error: $e');
+    }
   }
-}
 
   // ─────────────────────────────────────────────
   // Recording
@@ -245,6 +288,8 @@ class _HomePageState extends State<HomePage> {
 
   // ─────────────────────────────────────────────
   // Run TFLite inference
+  // NOTE: if model predicts "stop" (index 4), we
+  //       remap it to "go" before publishing
   // ─────────────────────────────────────────────
   Future<String?> _runInference(List<List<double>> melSpec) async {
     if (_interpreter == null) return null;
@@ -260,7 +305,7 @@ class _HomePageState extends State<HomePage> {
 
       final probs = output[0];
       double maxProb = 0.0;
-      int maxIdx = 0;
+      int    maxIdx  = 0;
       for (int i = 0; i < probs.length; i++) {
         if (probs[i] > maxProb) {
           maxProb = probs[i];
@@ -272,8 +317,12 @@ class _HomePageState extends State<HomePage> {
             '(${(maxProb * 100).toStringAsFixed(1)}%)');
 
       if (maxProb > 0.40) {
-        final command = _commands[maxIdx];
-        _publishCommand(command);  // send to ESP8266
+        String command = _commands[maxIdx];
+
+        // Remap stop → go (stop removed from ESP8266 handler)
+        if (command == 'stop') command = 'go';
+
+        _publishCommand(command);
         return '$command (${(maxProb * 100).toStringAsFixed(1)}%)';
       } else {
         return 'unclear (${(maxProb * 100).toStringAsFixed(1)}%)';
@@ -294,194 +343,248 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ─────────────────────────────────────────────
+  // Helpers
+  // ─────────────────────────────────────────────
+  Color _aqiColor() {
+    if (_airQuality == 0)    return Colors.white24;
+    if (_airQuality < 300)   return Colors.greenAccent;
+    if (_airQuality < 600)   return Colors.orangeAccent;
+    return Colors.redAccent;
+  }
+
+  String _aqiLabel() {
+    if (_airQuality == 0)   return 'No data';
+    if (_airQuality < 300)  return 'Good';
+    if (_airQuality < 600)  return 'Moderate';
+    return 'Poor';
+  }
+
+  // ─────────────────────────────────────────────
   // UI
   // ─────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final bool ledOn = _predictedCommand.startsWith('on') ||
+        _predictedCommand.startsWith('yes') ||
+        _predictedCommand.startsWith('up') ||
+        _predictedCommand.startsWith('go');
+
+    final bool buzzerOn = _predictedCommand.startsWith('go');
+    final bool coDanger = _coStatus == 'DANGER';
+
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A2E),
       body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
 
-              // Title
-              const Text(
-                'VocalCare',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Voice Controlled Smart Home',
-                style: TextStyle(
-                  fontSize: 15,
-                  color: Colors.white.withOpacity(0.6),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Status indicators row
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Model status
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _interpreter != null
-                          ? Colors.green.withOpacity(0.2)
-                          : Colors.red.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: _interpreter != null
-                            ? Colors.greenAccent
-                            : Colors.redAccent,
-                      ),
-                    ),
-                    child: Text(
-                      _interpreter != null ? '● Model' : '○ Model',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: _interpreter != null
-                            ? Colors.greenAccent
-                            : Colors.redAccent,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(width: 10),
-
-                  // MQTT status
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _mqttConnected
-                          ? Colors.green.withOpacity(0.2)
-                          : Colors.orange.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: _mqttConnected
-                            ? Colors.greenAccent
-                            : Colors.orange,
-                      ),
-                    ),
-                    child: Text(
-                      _mqttConnected ? '● MQTT' : '○ MQTT',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: _mqttConnected
-                            ? Colors.greenAccent
-                            : Colors.orange,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 50),
-
-              // Mic button
-              GestureDetector(
-                onTap: _isRecording ? null : _startRecording,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width:  _isRecording ? 120 : 100,
-                  height: _isRecording ? 120 : 100,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _isRecording
-                        ? const Color(0xFFE53935)
-                        : const Color(0xFF6750A4),
-                    boxShadow: _isRecording
-                        ? [BoxShadow(
-                            color: Colors.red.withOpacity(0.5),
-                            blurRadius: 20,
-                            spreadRadius: 5,
-                          )]
-                        : [],
-                  ),
-                  child: Icon(
-                    _isRecording ? Icons.mic : Icons.mic_none,
-                    size: 48,
+                // ── Title ───────────────────────────────
+                const Text(
+                  'VocalCare',
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
                 ),
-              ),
-
-              const SizedBox(height: 36),
-
-              // Status text
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Text(
-                  _statusText,
-                  textAlign: TextAlign.center,
+                const SizedBox(height: 6),
+                Text(
+                  'Voice Controlled Smart Room',
                   style: TextStyle(
                     fontSize: 15,
-                    color: Colors.white.withOpacity(0.8),
+                    color: Colors.white.withOpacity(0.6),
                   ),
                 ),
-              ),
 
-              const SizedBox(height: 24),
+                const SizedBox(height: 16),
 
-              // Predicted command box
-              if (_predictedCommand.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 28, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6750A4).withOpacity(0.25),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: const Color(0xFF6750A4),
-                      width: 1.5,
+                // ── Connection status row ────────────────
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _statusChip(
+                      label: 'Model',
+                      active: _interpreter != null,
                     ),
-                  ),
-                  child: Text(
-                    _predictedCommand,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
+                    const SizedBox(width: 10),
+                    _statusChip(
+                      label: 'MQTT',
+                      active: _mqttConnected,
+                      inactiveColor: Colors.orange,
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 40),
+
+                // ── Mic button ──────────────────────────
+                GestureDetector(
+                  onTap: _isRecording ? null : _startRecording,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width:  _isRecording ? 120 : 100,
+                    height: _isRecording ? 120 : 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _isRecording
+                          ? const Color(0xFFE53935)
+                          : const Color(0xFF6750A4),
+                      boxShadow: _isRecording
+                          ? [BoxShadow(
+                              color: Colors.red.withOpacity(0.5),
+                              blurRadius: 20,
+                              spreadRadius: 5,
+                            )]
+                          : [],
+                    ),
+                    child: Icon(
+                      _isRecording ? Icons.mic : Icons.mic_none,
+                      size: 48,
                       color: Colors.white,
                     ),
                   ),
                 ),
 
-              const SizedBox(height: 30),
+                const SizedBox(height: 28),
 
-              // Hardware status display
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 40),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _hardwareCard('LED', Icons.lightbulb_outline,
-                        _predictedCommand.startsWith('on') ||
-                        _predictedCommand.startsWith('yes') ||
-                        _predictedCommand.startsWith('up') ||
-                        _predictedCommand.startsWith('go')),
-                    _hardwareCard('Buzzer', Icons.notifications_active,
-                        _predictedCommand.startsWith('stop')),
-                  ],
+                // ── Status text ─────────────────────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Text(
+                    _statusText,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: Colors.white.withOpacity(0.8),
+                    ),
+                  ),
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 20),
+
+                // ── Predicted command box ───────────────
+                if (_predictedCommand.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 28, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6750A4).withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: const Color(0xFF6750A4),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Text(
+                      _predictedCommand,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+
+                const SizedBox(height: 28),
+
+                // ── Hardware status row ─────────────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _hardwareCard(
+                        'LED',
+                        Icons.lightbulb_outline,
+                        ledOn,
+                      ),
+                      _hardwareCard(
+                        'Buzzer',
+                        Icons.notifications_active,
+                        buzzerOn,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // ── Sensor data row ─────────────────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+
+                      // Air Quality card
+                      _sensorCard(
+                        title: 'Air Quality',
+                        icon: Icons.air,
+                        value: _airQuality == 0 ? '--' : '$_airQuality',
+                        subtitle: _aqiLabel(),
+                        color: _aqiColor(),
+                      ),
+
+                      // CO Status card
+                      _sensorCard(
+                        title: 'CO Gas',
+                        icon: Icons.warning_amber_rounded,
+                        value: _coStatus == 'UNKNOWN' ? '--' : _coStatus,
+                        subtitle: coDanger ? '⚠ Danger!' : 'Normal',
+                        color: coDanger ? Colors.redAccent : Colors.greenAccent,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // ── Sensor source note ──────────────────
+                Text(
+                  _airQuality == 0
+                      ? 'Waiting for sensor data...'
+                      : 'Live from ESP8266 · updates every 5s',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.white.withOpacity(0.35),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  // Hardware status card widget
+  // ── Status chip widget ──────────────────────
+  Widget _statusChip({
+    required String label,
+    required bool active,
+    Color inactiveColor = Colors.redAccent,
+  }) {
+    final color = active ? Colors.greenAccent : inactiveColor;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color),
+      ),
+      child: Text(
+        active ? '● $label' : '○ $label',
+        style: TextStyle(fontSize: 12, color: color),
+      ),
+    );
+  }
+
+  // ── Hardware card widget ────────────────────
   Widget _hardwareCard(String label, IconData icon, bool isActive) {
     return Container(
       width: 110,
@@ -516,6 +619,54 @@ class _HomePageState extends State<HomePage> {
             style: TextStyle(
               fontSize: 11,
               color: isActive ? Colors.greenAccent : Colors.white24,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Sensor card widget ──────────────────────
+  Widget _sensorCard({
+    required String title,
+    required IconData icon,
+    required String value,
+    required String subtitle,
+    required Color color,
+  }) {
+    return Container(
+      width: 110,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.5), width: 1.5),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 26),
+          const SizedBox(height: 6),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.white.withOpacity(0.6),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: 10,
+              color: color.withOpacity(0.8),
             ),
           ),
         ],
